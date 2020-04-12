@@ -12,6 +12,9 @@ from bratiaa.evaluation import *
 from bratiaa.utils import read, TokenOverlap
 from bratsubset.projectconfig import ProjectConfiguration
 
+from setuptools.namespaces import flatten
+from sklearn.metrics import cohen_kappa_score
+
 # attempted division by zero is expected and unproblematic -> NaN
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -80,6 +83,8 @@ class F1Agreement:
             documents.sort()
         assert len(annotators) > 1, 'At least two annotators are necessary to compute agreement!'
         num_pairs = comb(len(annotators), 2, exact=True)
+        self.exp_final=[]
+        self.pred_final=[]        
         # (p, d, c, l) where p := annotator pairs, d := documents, c := counts (tp, total = 2*tp+fp+fn), l := labels
         self._pdcl = np.zeros((num_pairs, len(documents), 2, len(labels)))
         self._documents = list(documents)
@@ -96,6 +101,8 @@ class F1Agreement:
         self._token_func = token_func  # function used for tokenization
         self._compute_tp_total(input_gen)
 
+        
+
     @property
     def annotators(self):
         return list(self._annotators)
@@ -109,6 +116,8 @@ class F1Agreement:
         return list(self._labels)
 
     def _compute_tp_total(self, input_gen):
+        exp_total=[]
+        pred_total=[]
         for doc_index, document in enumerate(input_gen()):
             assert doc_index < len(self._documents), 'Input generator yields more documents than expected!'
             to = None
@@ -117,13 +126,20 @@ class F1Agreement:
                 tokens = list(self._token_func(text))
                 to = TokenOverlap(text, tokens)
             for anno_file_1, anno_file_2 in combinations(document.ann_files, 2):
+#                 tp, exp, pred, exp_list, pred_list = self._eval_func(anno_file_1.ann_path, anno_file_2.ann_path, tokens=to)
                 tp, exp, pred = self._eval_func(anno_file_1.ann_path, anno_file_2.ann_path, tokens=to)
+#                 exp_total.append(exp_list)
+#                 pred_total.append(pred_list)
                 pair_idx = self._pair2idx[(anno_file_1.annotator_id, anno_file_2.annotator_id)]
                 doc_idx = self._doc2idx[document.doc_id]
                 self._increment_counts(tp, pair_idx, doc_idx, 0)
                 self._increment_counts(exp, pair_idx, doc_idx, 1)
                 self._increment_counts(pred, pair_idx, doc_idx, 1)
-
+                
+#         self.exp_final=list(flatten(exp_total))
+#         self.pred_final=list(flatten(pred_total))
+        
+                
     def _increment_counts(self, annotations, pair, doc, kind):
         for a in annotations:
             try:
@@ -256,6 +272,11 @@ class F1Agreement:
         plt.savefig(out_path)
 
 
+#     def compute_kappa_score(self):
+#         labels = list(set(self.exp_final))
+#         return cohen_kappa_score(self.exp_final, self.pred_final, labels=['PER', 'GENERAL', 'PROFANITY', 'MISC', 'SARCASM', 'VIOLENCE', 'OUTOFSCOPE', 'LOC', 'FEEDBACK'])
+        
+        
 def compute_f1_agreement(project_root, input_gen=input_generator, token_func=None, eval_func=None):
     if not eval_func:
         eval_func = exact_match_instance_evaluation
