@@ -12,6 +12,10 @@ AttAnnotation = namedtuple('AttAnnotation', ['type', 'id', 'target', 'value'])
 
 FinalAnnotation = namedtuple('Annotation', ['type','label', 'attribute'])
 
+RelAnnotation = namedtuple('RelAnnotation', ['type', 'label', 'source_id', 'target_id'])
+
+FinalRelAnnotation = namedtuple('FinalRelAnnotation', ['type', 'label', 'source', 'target'])
+
 def exact_match_instance_evaluation(ann_path_1, ann_path_2, tokens=None):
     exp = set(_read_textbound_annotations(ann_path_1))
     pred = set(_read_textbound_annotations(ann_path_2))
@@ -42,7 +46,7 @@ def exact_match_instance_polarity_evaluation(ann_path_1, ann_path_2, tokens=None
     
 #     print("*****************************************")
 #     return (),(),()    
-    return tp, exp_set, pred_set
+    return tp, exp, pred_set
 
 
 def _read_attributebound_annotations(ann_path):
@@ -69,7 +73,73 @@ def _read_attributebound_annotations(ann_path):
                     yield final_ann
                     
 
+def exact_match_instance_relation_evaluation(ann_path_1, ann_path_2, tokens=None):
+    exp = list(_read_relationbound_annotations(ann_path_1))
+    exp_set = set(exp)
+    print("List = ", exp)
+    print("Set = ", exp_set)
+    print("------")
+    pred = list(_read_relationbound_annotations(ann_path_2))
+    pred_set = set(pred)
+    print("List = ", pred)
+    print("Set = ", pred_set)
+    tp = exp_set.intersection(pred_set)
+#     tp = list((Counter(exp) & Counter(pred)).elements())
+    print("Tp = ",tp)
+    
+    print("*****************************************")
+#     return (),(),()    
+    return tp, exp_set, pred_set
+    # Using list instead of set because there might be
+    # duplicate tagging in a same sentence
+    # For example, there can be two GENERAL in same sentence
+#     return tp, exp, pred
 
+
+def _read_relationbound_annotations(ann_path):
+    with bs.Annotations(ann_path.as_posix(), read_only=True) as annotations:
+        rel_ann = RelAnnotation
+        aspect_ann = Annotation
+        final_rel_ann = FinalRelAnnotation
+        polarity_ann = AttAnnotation
+        polarity_list = []        
+        aspect_list = []
+        relation_list = []
+        
+        for annotation in annotations.get_textbounds():
+            aspect_ann=Annotation('T', annotation.id, annotation.type, tuple(annotation.spans))
+            aspect_list.append(aspect_ann)
+                
+        # # Get untargeted aspect terms, with value 'YES'
+        for annotation in annotations.get_attributes():
+            att_ann=AttAnnotation('A', annotation.id, annotation.target, annotation.value)
+            if att_ann.value in ['YES']:
+                polarity_list.append(att_ann)
+            
+        for annotation in annotations.get_relations():
+            rel_ann=RelAnnotation('R', annotation.type, annotation.arg1, annotation.arg2)
+            relation_list.append(rel_ann)
+            
+        print("Relation list = ", relation_list)
+        print("Aspect list = ", aspect_list)
+        print("Polarity list = ", polarity_list)
+        
+        # Get targeted aspect terms
+        for each_rel in relation_list:
+            source_label = [x.label for x in aspect_list if x.id == each_rel.source_id]
+            target_label = [x.label for x in aspect_list if x.id == each_rel.target_id]
+            final_ann = FinalRelAnnotation('R', 'targeted', source_label[0], target_label[0])
+            print(final_ann)
+            yield final_ann
+
+        # Get untargeted aspect terms
+        for each_att in polarity_list:
+            source_label = [x.label for x in aspect_list if x.id == each_att.target]
+            target_label = ['NULL']
+            final_ann = FinalRelAnnotation('R', 'untargeted', source_label[0], target_label[0])
+            print(final_ann)
+            yield final_ann            
+                    
 def exact_match_token_evaluation(ann_path_1, ann_path_2, tokens=None):
     """
     Annotations are split into token-sized bits before evaluation.
