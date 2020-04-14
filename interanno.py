@@ -1,26 +1,48 @@
 '''
     To check inter-annotator agreement
+    on token-level, polarity-level, relation-level
+    
+    How to run:
+        # relation-level
+        python interanno.py relation
+        
+        # polarity-level
+        python interanno.py polarity
+        
+        # instance-level (exact matching)
+        python interanno.py instance
+        
+        # instance-level (subword matching)
+        python interanno.py        
 '''
 
 import sys
 import re
 
-
-
-sys.path.insert(1, '../thirdparty/bratiaa/')
+# sys.path.insert(1, '../thirdparty/bratiaa/')
 from bratiaa import agree as biaa
-from bratiaa.evaluation import exact_match_instance_relation_evaluation
+from bratiaa.evaluation import *
 
 project = '../../agreement_version/agreement/brat_annotator/'
 
-agreement_type = 'relation'
+agreement_type = sys.argv[1] if len(sys.argv) > 1 else None
+
+def token_func(text):
+    # word level
+#     token = re.compile("\S+")
+    # character level
+    token = re.compile('\w+|[^\w\s]+')
+    for match in re.finditer(token, text):
+        yield match.start(), match.end()
 
 if agreement_type == 'polarity':
     f1_agreement = biaa.compute_f1_agreement(project, eval_func=exact_match_instance_polarity_evaluation)
 elif agreement_type == 'relation':
     f1_agreement = biaa.compute_f1_agreement(project, eval_func=exact_match_instance_relation_evaluation)     
-else:
-    f1_agreement = biaa.compute_f1_agreement(project)    
+elif agreement_type == 'instance':
+    f1_agreement = biaa.compute_f1_agreement(project) 
+else:    
+    f1_agreement = biaa.compute_f1_agreement(project, token_func=token_func)    
 
 # print agreement report to stdout
 biaa.iaa_report(f1_agreement)
@@ -39,11 +61,7 @@ print("Total mean =", total_mean)
 print("************************************************************")
 
 
-def token_func(text):
-#     token = re.compile('\w+|[^\w\s]+')
-    token = re.compile("\S+")
-    for match in re.finditer(token, text):
-        yield match.start(), match.end()
+
 
 # token-level agreement
 #f1_agreement = biaa.compute_f1_agreement(project, token_func=token_func)
